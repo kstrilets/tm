@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Triad Match</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="logo">
+        <span class="logo-icon">◈</span>
+        <h1>Triad Match</h1>
+      </div>
+      <div class="stats">
+        <div class="stat">
+          <span class="stat-label">Score</span>
+          <span class="stat-value" id="score">0</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Goal</span>
+          <span class="stat-value" id="goal">10000</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Board</span>
+          <span class="stat-value" id="boardCount">1/10</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Hand Max</span>
+          <span class="stat-value" id="handMax">7</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Numbers</span>
+          <span class="stat-value" id="unlockedMax">1</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="main">
+      <section class="board-section">
+        <h2 class="section-title">Board</h2>
+        <p class="hint">Add cards to the right (max 10 on board). Double-click a hand card to place it. Each piece has at most one empty row. Five in a row unlocks the next number. Reach 10,000 to win. Flip with ⇅ or R.</p>
+        <div class="merge-mode-toggle" role="group" aria-label="Merge mode">
+          <span class="merge-mode-label">Five-in-a-row merge:</span>
+          <label class="merge-mode-option">
+            <input type="radio" name="mergeMode" id="mergeModeRemoveAll" value="removeAll" checked />
+            Remove all 5
+          </label>
+          <label class="merge-mode-option">
+            <input type="radio" name="mergeMode" id="mergeModePartial" value="partial" />
+            Shift merge
+          </label>
+          <label class="merge-mode-option" title="Left removed; other four rows become the new number">
+            <input type="radio" name="mergeMode" id="mergeModeUpgradeRest" value="upgradeRest" />
+            Upgrade rest
+          </label>
+        </div>
+        <div class="board-wrap">
+          <div class="board" id="board"></div>
+        </div>
+        <div class="placement-hints" id="placementHints"></div>
+      </section>
+
+      <section class="hand-section">
+        <div class="hand-header">
+          <h2 class="section-title">Your Hand</h2>
+          <button class="btn btn-secondary" id="refreshBtn" title="Replace marked cards (Shift+click), selected card, or whole hand. Hand max −1.">
+            Refresh Hand (−1 max)
+          </button>
+        </div>
+        <div class="hand" id="hand"></div>
+      </section>
+    </main>
+
+    <div class="message-bar" id="messageBar">Select a card, then place it on the board.</div>
+  </div>
+
+  <div class="overlay hidden" id="overlay">
+    <div class="modal">
+      <h2 id="modalTitle">Game Over</h2>
+      <p id="modalText"></p>
+      <button class="btn btn-primary" id="modalBtn">Continue</button>
+    </div>
+  </div>
+
+  <script src="js/game.js"></script>
+</body>
+</html>
