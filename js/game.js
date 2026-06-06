@@ -8,18 +8,11 @@ const MERGE_COUNT = 5;
 const BOARD_MAX = 10;
 const SCORE_GOAL = 10000;
 const EMPTY_CHANCE = 0.3;
-const MERGE_MODE_KEY = "triad-merge-mode";
-const MERGE_MODES = {
-  REMOVE_ALL: "removeAll",
-  PARTIAL: "partial",
-  UPGRADE_REST: "upgradeRest",
-};
 
 let state = {
   score: 0,
   handMax: STARTING_HAND_MAX,
   unlockedMax: 1,
-  mergeMode: MERGE_MODES.REMOVE_ALL,
   board: [],
   hand: [],
   selectedCardId: null,
@@ -197,15 +190,7 @@ function removeCardsByIds(board, ids) {
   return board.filter((c) => !idSet.has(c.id));
 }
 
-function setSegmentEmpty(card, row) {
-  const otherEmpty = card.segments.findIndex((s, i) => i !== row && s.number === null);
-  if (otherEmpty !== -1) {
-    card.segments[otherEmpty].number = randomSegmentValue();
-  }
-  card.segments[row].number = null;
-}
-
-function applyRemoveAllMerge(merge) {
+function applyMerge(merge) {
   state.board = removeCardsByIds(state.board, merge.ids);
   const cleared = state.board.length === 0;
   if (cleared) {
@@ -214,113 +199,9 @@ function applyRemoveAllMerge(merge) {
   return cleared;
 }
 
-function applyPartialMerge(merge) {
-  const { row, ids, nextNumber } = merge;
-  const [leftId, ...rest] = ids;
-  const middleIds = rest.slice(0, 3);
-  const rightId = rest[3];
-
-  if (state.starterId === leftId) {
-    state.starterId = state.board.find((c) => c.id !== leftId)?.id ?? null;
-  }
-
-  state.board = state.board.filter((c) => c.id !== leftId);
-
-  for (const id of middleIds) {
-    const card = state.board.find((c) => c.id === id);
-    if (card) setSegmentEmpty(card, row);
-  }
-
-  const rightCard = state.board.find((c) => c.id === rightId);
-  if (rightCard) {
-    rightCard.segments[row].number = nextNumber;
-  }
-
-  if (state.board.length === 0) {
-    state.board.push(createStarterCard());
-  } else if (!state.starterId) {
-    state.starterId = state.board[0].id;
-  }
-}
-
-function applyUpgradeRestMerge(merge) {
-  const { row, ids, nextNumber } = merge;
-  const [leftId, ...restIds] = ids;
-
-  if (state.starterId === leftId) {
-    state.starterId = state.board.find((c) => c.id !== leftId)?.id ?? null;
-  }
-
-  state.board = state.board.filter((c) => c.id !== leftId);
-
-  for (const id of restIds) {
-    const card = state.board.find((c) => c.id === id);
-    if (card) card.segments[row].number = nextNumber;
-  }
-
-  if (state.board.length === 0) {
-    state.board.push(createStarterCard());
-  } else if (!state.starterId) {
-    state.starterId = state.board[0].id;
-  }
-}
-
-function mergeRemovesLeftOnly() {
-  return state.mergeMode === MERGE_MODES.PARTIAL || state.mergeMode === MERGE_MODES.UPGRADE_REST;
-}
-
 function getMergeMessage(merge) {
   const rowName = ROW_LABELS[merge.row].toLowerCase();
-  if (state.mergeMode === MERGE_MODES.PARTIAL) {
-    return `Five ${merge.value}s on the ${rowName} row — left removed, three emptied, right becomes ${merge.nextNumber}! +${merge.bonus}`;
-  }
-  if (state.mergeMode === MERGE_MODES.UPGRADE_REST) {
-    return `Five ${merge.value}s on the ${rowName} row — left removed, rest become ${merge.nextNumber}! +${merge.bonus}`;
-  }
   return `Five ${merge.value}s on the ${rowName} row merge — +${merge.bonus}!`;
-}
-
-function applyMerge(merge) {
-  if (state.mergeMode === MERGE_MODES.PARTIAL) {
-    applyPartialMerge(merge);
-    return false;
-  }
-  if (state.mergeMode === MERGE_MODES.UPGRADE_REST) {
-    applyUpgradeRestMerge(merge);
-    return false;
-  }
-  return applyRemoveAllMerge(merge);
-}
-
-function getMergeModeDescription() {
-  if (state.mergeMode === MERGE_MODES.PARTIAL) {
-    return "Shift merge: left removed, middle emptied, right upgraded.";
-  }
-  if (state.mergeMode === MERGE_MODES.UPGRADE_REST) {
-    return "Upgrade rest: left removed, other four become the new number.";
-  }
-  return "Remove all: five matching pieces leave the board.";
-}
-
-function loadMergeMode() {
-  const saved = localStorage.getItem(MERGE_MODE_KEY);
-  if (Object.values(MERGE_MODES).includes(saved)) {
-    state.mergeMode = saved;
-  }
-}
-
-function saveMergeMode(mode) {
-  state.mergeMode = mode;
-  localStorage.setItem(MERGE_MODE_KEY, mode);
-}
-
-function syncMergeModeUI() {
-  const removeAll = document.getElementById("mergeModeRemoveAll");
-  const partial = document.getElementById("mergeModePartial");
-  const upgradeRest = document.getElementById("mergeModeUpgradeRest");
-  if (removeAll) removeAll.checked = state.mergeMode === MERGE_MODES.REMOVE_ALL;
-  if (partial) partial.checked = state.mergeMode === MERGE_MODES.PARTIAL;
-  if (upgradeRest) upgradeRest.checked = state.mergeMode === MERGE_MODES.UPGRADE_REST;
 }
 
 function fillHand() {
@@ -524,7 +405,6 @@ function render() {
   renderBoard();
   renderHand();
   renderStats();
-  syncMergeModeUI();
 }
 
 function onHandCardClick(cardId, event) {
@@ -618,9 +498,8 @@ async function processMatches() {
 
     setMessage(msg, "bonus");
 
-    const animateIds = mergeRemovesLeftOnly() ? [merge.ids[0]] : merge.ids;
     document.querySelectorAll(".card").forEach((el) => {
-      if (animateIds.includes(el.dataset.id)) el.classList.add("removing");
+      if (merge.ids.includes(el.dataset.id)) el.classList.add("removing");
     });
 
     await delay(420);
@@ -695,17 +574,6 @@ function showModal(title, text, btnLabel, onAction) {
 }
 
 document.getElementById("refreshBtn").addEventListener("click", refreshHand);
-
-document.querySelectorAll('input[name="mergeMode"]').forEach((input) => {
-  input.addEventListener("change", (e) => {
-    if (e.target.checked) {
-      saveMergeMode(e.target.value);
-      setMessage(getMergeModeDescription());
-    }
-  });
-});
-
-loadMergeMode();
 
 document.addEventListener("keydown", (e) => {
   if (!state.selectedCardId || e.target.matches("input, textarea, button")) return;

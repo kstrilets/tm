@@ -40,22 +40,7 @@
     <main class="main">
       <section class="board-section">
         <h2 class="section-title">Board</h2>
-        <p class="hint">Add cards to the right (max 10 on board). Double-click a hand card to place it. Each piece has at most one empty row. Five in a row unlocks the next number. Reach 10,000 to win. Flip with ⇅ or R.</p>
-        <div class="merge-mode-toggle" role="group" aria-label="Merge mode">
-          <span class="merge-mode-label">Five-in-a-row merge:</span>
-          <label class="merge-mode-option">
-            <input type="radio" name="mergeMode" id="mergeModeRemoveAll" value="removeAll" checked />
-            Remove all 5
-          </label>
-          <label class="merge-mode-option">
-            <input type="radio" name="mergeMode" id="mergeModePartial" value="partial" />
-            Shift merge
-          </label>
-          <label class="merge-mode-option" title="Left removed; other four rows become the new number">
-            <input type="radio" name="mergeMode" id="mergeModeUpgradeRest" value="upgradeRest" />
-            Upgrade rest
-          </label>
-        </div>
+        <p class="hint">Add cards to the right (max 10 on board). Double-click a hand card to place it. Each piece has at most one empty row. Five in a row removes those 5 cards and unlocks the next number. Reach 10,000 to win.</p>
         <div class="board-wrap">
           <div class="board" id="board"></div>
         </div>
