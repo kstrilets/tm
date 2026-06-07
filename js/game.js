@@ -1,6 +1,5 @@
 const COLORS = ["red", "cyan", "gold", "violet"];
 const ROW_LABELS = ["Top", "Middle", "Bottom"];
-
 const STARTING_HAND_MAX = 7;
 const MIN_HAND_MAX = 1;
 const MAX_NUMBER = 11;
@@ -41,11 +40,9 @@ function createCard() {
     color: randomColor(),
     number: randomSegmentValue(),
   }));
-
   if (Math.random() < EMPTY_CHANCE) {
     segments[randomInt(2)].number = null;
   }
-
   return { id: uid(), segments };
 }
 
@@ -111,16 +108,20 @@ function canRefresh() {
 }
 
 function checkGameOver() {
+  if (isBoardFull()) {
+    showModal(
+      "Board Full — Game Over",
+      `The board filled up with ${BOARD_MAX} cards. Final score: ${state.score}.`,
+      "Play Again",
+      () => initGame()
+    );
+    return true;
+  }
   if (hasPlayableMove()) return false;
-
   if (canRefresh()) {
-    const msg = isBoardFull()
-      ? "Board full and no valid placement. Refresh your hand to continue."
-      : "No valid moves. Refresh your hand to continue.";
-    setMessage(msg, "warning");
+    setMessage("No valid moves. Refresh your hand to continue.", "warning");
     return false;
   }
-
   showModal(
     "Game Over",
     `No more moves possible. Final score: ${state.score}.`,
@@ -157,7 +158,6 @@ function placementScore(rows) {
 function findFiveInRowMerges(board) {
   const merges = [];
   if (board.length < MERGE_COUNT) return merges;
-
   for (let row = 0; row < 3; row++) {
     let i = 0;
     while (i < board.length) {
@@ -279,6 +279,25 @@ function renderBoard() {
   const boardEl = document.getElementById("board");
   boardEl.innerHTML = "";
 
+  // Ghost track — always render all 10 slot outlines behind real cards
+  const boardWrap = boardEl.parentElement;
+  let ghostTrack = boardWrap.querySelector(".board-ghost-track");
+  if (!ghostTrack) {
+    ghostTrack = document.createElement("div");
+    ghostTrack.className = "board-ghost-track";
+    for (let i = 0; i < BOARD_MAX; i++) {
+      const ghost = document.createElement("div");
+      ghost.className = "board-ghost-slot";
+      ghost.dataset.slot = i + 1;
+      ghostTrack.appendChild(ghost);
+    }
+    boardWrap.appendChild(ghostTrack);
+  }
+  // Danger tint on last 3 slots
+  ghostTrack.querySelectorAll(".board-ghost-slot").forEach((el, i) => {
+    el.classList.toggle("danger", i >= BOARD_MAX - 3);
+  });
+
   const selected = state.hand.find((c) => c.id === state.selectedCardId);
   let canPlaceRight = false;
   let hintText = "";
@@ -301,7 +320,6 @@ function renderBoard() {
 
   const rightSlot = document.createElement("div");
   rightSlot.className = "board-slot";
-
   const rightBtn = document.createElement("button");
   rightBtn.className = "place-btn";
   rightBtn.textContent = "Place →";
@@ -309,13 +327,12 @@ function renderBoard() {
   rightBtn.disabled = !canPlaceRight;
   if (canPlaceRight) rightBtn.classList.add("valid");
   rightBtn.addEventListener("click", placeCard);
-
   rightSlot.appendChild(rightBtn);
   boardEl.appendChild(rightSlot);
 
   const hints = document.getElementById("placementHints");
-  if (isBoardFull() && !canPlaceRight) {
-    hints.textContent = `Board full (${BOARD_MAX}/${BOARD_MAX}). Merge five in a row to clear space.`;
+  if (isBoardFull()) {
+    hints.textContent = `Board full (${BOARD_MAX}/${BOARD_MAX}) — Game Over!`;
   } else if (selected && canPlaceRight) {
     hints.innerHTML = `<span class="match-row">${hintText}</span>`;
   } else if (selected) {
@@ -440,13 +457,15 @@ function onHandCardDoubleClick(cardId, event) {
 function placeCard() {
   const idx = state.hand.findIndex((c) => c.id === state.selectedCardId);
   if (idx === -1) return;
+
   if (isBoardFull()) {
-    setMessage(`Board is full (${BOARD_MAX} pieces). Merge to clear space.`, "warning");
+    setMessage(`Board is full (${BOARD_MAX} pieces). Game Over!`, "warning");
     return;
   }
 
   const card = state.hand[idx];
   const neighbor = boardEnd();
+
   if (!canPlace(card, neighbor)) {
     setMessage("Invalid placement.", "warning");
     return;
@@ -455,7 +474,6 @@ function placeCard() {
   const rows = matchingRows(card, neighbor);
   const gained = placementScore(rows);
   state.score += gained;
-
   state.hand.splice(idx, 1);
   state.board.push(card);
   state.selectedCardId = null;
@@ -490,7 +508,6 @@ async function processMatches() {
     totalBonus += merge.bonus;
 
     let msg = getMergeMessage(merge);
-
     if (merge.nextNumber <= MAX_NUMBER && merge.nextNumber > state.unlockedMax) {
       state.unlockedMax = merge.nextNumber;
       msg += ` Number ${merge.nextNumber} unlocked on pieces.`;
@@ -509,7 +526,6 @@ async function processMatches() {
     }
 
     state.score += merge.bonus;
-
     render();
     await delay(200);
 
@@ -529,7 +545,6 @@ function refreshHand() {
   if (!canRefresh()) return;
 
   const targetIds = new Set(getRefreshTargetIds());
-
   state.hand = state.hand.map((card) =>
     targetIds.has(card.id) ? createCard() : card
   );
@@ -544,12 +559,12 @@ function refreshHand() {
   if (!checkGameOver()) {
     setMessage(`Hand refreshed. Max hand size is now ${state.handMax}.`, "warning");
   }
+
   render();
 }
 
 function checkWin() {
   if (state.score < SCORE_GOAL) return false;
-
   showModal(
     "You Win!",
     `You reached ${SCORE_GOAL} points! Final score: ${state.score}.`,
@@ -566,7 +581,6 @@ function showModal(title, text, btnLabel, onAction) {
   const btn = document.getElementById("modalBtn");
   btn.textContent = btnLabel;
   overlay.classList.remove("hidden");
-
   btn.onclick = () => {
     overlay.classList.add("hidden");
     onAction();
