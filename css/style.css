@@ -155,6 +155,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: flex-start;
+  position: relative;
 }
 
 .board {
@@ -163,6 +164,8 @@ body {
   gap: 0;
   min-height: var(--card-h);
   margin-right: auto;
+  position: relative;
+  z-index: 1;
 }
 
 .board-slot {
@@ -171,6 +174,94 @@ body {
   align-items: center;
   gap: 0.35rem;
 }
+
+/* ── Board ghost track ─────────────────────────────────────── */
+
+.board-ghost-track {
+  display: flex;
+  gap: 0;
+  position: absolute;
+  top: 1.5rem;
+  left: 1.5rem;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.board-ghost-slot {
+  width: var(--card-w);
+  height: var(--card-h);
+  border-radius: 10px;
+  border: 2px dashed rgba(108, 140, 255, 0.18);
+  background:
+    radial-gradient(ellipse 60% 40% at 50% 30%, rgba(108, 140, 255, 0.06), transparent),
+    linear-gradient(160deg, rgba(255, 255, 255, 0.03) 0%, transparent 60%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding-bottom: 0.5rem;
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Slot number label */
+.board-ghost-slot::after {
+  content: attr(data-slot);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: rgba(108, 140, 255, 0.25);
+  text-transform: uppercase;
+}
+
+/* Decorative 3-segment divider lines */
+.board-ghost-slot::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      to bottom,
+      transparent calc(33.33% - 1px),
+      rgba(108, 140, 255, 0.08) calc(33.33% - 1px),
+      rgba(108, 140, 255, 0.08) 33.33%,
+      transparent 33.33%,
+      transparent calc(66.66% - 1px),
+      rgba(108, 140, 255, 0.08) calc(66.66% - 1px),
+      rgba(108, 140, 255, 0.08) 66.66%,
+      transparent 66.66%
+    );
+}
+
+/* Danger tint on last 3 slots */
+.board-ghost-slot.danger {
+  border-color: rgba(248, 113, 113, 0.3);
+  background:
+    radial-gradient(ellipse 60% 40% at 50% 30%, rgba(248, 113, 113, 0.07), transparent),
+    linear-gradient(160deg, rgba(255, 255, 255, 0.02) 0%, transparent 60%);
+}
+
+.board-ghost-slot.danger::after {
+  color: rgba(248, 113, 113, 0.3);
+}
+
+.board-ghost-slot.danger::before {
+  background:
+    linear-gradient(
+      to bottom,
+      transparent calc(33.33% - 1px),
+      rgba(248, 113, 113, 0.1) calc(33.33% - 1px),
+      rgba(248, 113, 113, 0.1) 33.33%,
+      transparent 33.33%,
+      transparent calc(66.66% - 1px),
+      rgba(248, 113, 113, 0.1) calc(66.66% - 1px),
+      rgba(248, 113, 113, 0.1) 66.66%,
+      transparent 66.66%
+    );
+}
+
+/* ── End ghost track ───────────────────────────────────────── */
 
 .place-btn {
   font-size: 0.7rem;
@@ -247,9 +338,9 @@ body {
 }
 
 @keyframes pop-out {
-  0% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.15); opacity: 0.8; }
-  100% { transform: scale(0); opacity: 0; }
+  0%   { transform: scale(1);    opacity: 1; }
+  50%  { transform: scale(1.15); opacity: 0.8; }
+  100% { transform: scale(0);    opacity: 0; }
 }
 
 .segment {
@@ -295,9 +386,9 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
-.segment[data-color="red"] { background: linear-gradient(135deg, #b91c1c, var(--color-red)); }
-.segment[data-color="cyan"] { background: linear-gradient(135deg, #0891b2, var(--color-cyan)); }
-.segment[data-color="gold"] { background: linear-gradient(135deg, #d97706, var(--color-gold)); }
+.segment[data-color="red"]    { background: linear-gradient(135deg, #b91c1c, var(--color-red)); }
+.segment[data-color="cyan"]   { background: linear-gradient(135deg, #0891b2, var(--color-cyan)); }
+.segment[data-color="gold"]   { background: linear-gradient(135deg, #d97706, var(--color-gold)); }
 .segment[data-color="violet"] { background: linear-gradient(135deg, #7c3aed, var(--color-violet)); }
 
 .hand-section {
@@ -423,7 +514,7 @@ body {
 
 .message-bar.success { color: var(--success); }
 .message-bar.warning { color: var(--warning); }
-.message-bar.bonus { color: var(--color-violet); }
+.message-bar.bonus   { color: var(--color-violet); }
 
 .overlay {
   position: fixed;
@@ -473,7 +564,7 @@ body {
 }
 
 @keyframes float-up {
-  0% { opacity: 1; transform: translateY(0); }
+  0%   { opacity: 1; transform: translateY(0); }
   100% { opacity: 0; transform: translateY(-60px); }
 }
 
@@ -485,6 +576,5 @@ body {
 
   .segment .num { font-size: 1.45rem; }
   .card.in-hand .segment .num { font-size: 1.7rem; }
-
   .app { padding: 1rem; }
 }
