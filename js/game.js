@@ -162,19 +162,21 @@ function findFiveInRowMerges(board) {
     let i = 0;
     while (i < board.length) {
       const val = board[i].segments[row].number;
-      if (val === null) {
-        i++;
-        continue;
-      }
+      if (val === null) { i++; continue; }
       let j = i + 1;
       while (j < board.length && board[j].segments[row].number === val) j++;
       if (j - i >= MERGE_COUNT) {
-        const ids = board.slice(i, i + MERGE_COUNT).map((c) => c.id);
+        // The 5 cards: indices i..i+4
+        // Survivor = rightmost (index i+4), removed = left 4 (i..i+3)
+        const five = board.slice(i, i + MERGE_COUNT);
+        const survivor = five[MERGE_COUNT - 1];
+        const removed = five.slice(0, MERGE_COUNT - 1);
         merges.push({
           start: i,
           row,
           value: val,
-          ids,
+          survivorId: survivor.id,
+          removedIds: removed.map((c) => c.id),
           bonus: 40 + val * 25,
           nextNumber: val + 1,
         });
@@ -185,23 +187,42 @@ function findFiveInRowMerges(board) {
   return merges;
 }
 
-function removeCardsByIds(board, ids) {
-  const idSet = new Set(ids);
-  return board.filter((c) => !idSet.has(c.id));
-}
-
+// Apply merge to state: remove 4 left cards, move survivor to start position,
+// increment all matched rows on survivor.
+// Returns { cleared } — whether board became empty before we inserted survivor.
 function applyMerge(merge) {
-  state.board = removeCardsByIds(state.board, merge.ids);
-  const cleared = state.board.length === 0;
-  if (cleared) {
-    state.board.push(createStarterCard());
+  const survivorIdx = state.board.findIndex((c) => c.id === merge.survivorId);
+  if (survivorIdx === -1) return { cleared: false };
+
+  const survivor = state.board[survivorIdx];
+
+  // Increment every row that had the matching value
+  // (could be multiple rows if the card matched on >1 row in this merge)
+  // We find all rows on the survivor that equal merge.value
+  for (let r = 0; r < 3; r++) {
+    if (survivor.segments[r].number === merge.value) {
+      survivor.segments[r].number =
+        merge.nextNumber <= MAX_NUMBER ? merge.nextNumber : merge.value;
+    }
   }
-  return cleared;
+
+  // Remove the 4 left cards
+  const removedSet = new Set(merge.removedIds);
+  state.board = state.board.filter((c) => !removedSet.has(c.id));
+
+  // Move survivor to position merge.start
+  const newSurvivorIdx = state.board.findIndex((c) => c.id === merge.survivorId);
+  state.board.splice(newSurvivorIdx, 1);
+  state.board.splice(merge.start, 0, survivor);
+
+  // If survivor was the only card left (board had exactly 5 and all removed + survivor),
+  // board is now just [survivor] which is fine — no need for a new starter.
+  return { cleared: false };
 }
 
 function getMergeMessage(merge) {
   const rowName = ROW_LABELS[merge.row].toLowerCase();
-  return `Five ${merge.value}s on the ${rowName} row merge — +${merge.bonus}!`;
+  return `Five ${merge.value}s on the ${merge.row === 0 ? "top" : merge.row === 1 ? "middle" : "bottom"} row — +${merge.bonus}! Rightmost becomes ${merge.nextNumber}.`;
 }
 
 function fillHand() {
@@ -221,6 +242,12 @@ function initGame() {
   state.hand = [];
   state.selectedCardId = null;
   state.refreshIds.clear();
+  // Remove any leftover ghost track so it gets rebuilt fresh
+  const boardWrap = document.getElementById("board")?.parentElement;
+  if (boardWrap) {
+    const gt = boardWrap.querySelector(".board-ghost-track");
+    if (gt) gt.remove();
+  }
   fillHand();
   guaranteeFirstMove();
   render();
@@ -409,12 +436,8 @@ function renderStats() {
 }
 
 function getRefreshTargetIds() {
-  if (state.refreshIds.size > 0) {
-    return [...state.refreshIds];
-  }
-  if (state.selectedCardId) {
-    return [state.selectedCardId];
-  }
+  if (state.refreshIds.size > 0) return [...state.refreshIds];
+  if (state.selectedCardId) return [state.selectedCardId];
   return state.hand.map((c) => c.id);
 }
 
@@ -488,11 +511,107 @@ function placeCard() {
 
   processMatches().then(() => {
     fillHand();
-    if (!checkGameOver()) {
-      checkWin();
-    }
+    if (!checkGameOver()) checkWin();
     render();
   });
+}
+
+// ── Merge animation ────────────────────────────────────────────────────────
+//
+// For each merge:
+//  1. Flash the 5 matching cards gold to signal the match
+//  2. Fade+shrink the 4 left cards out (600ms)
+//  3. While they fade, slide the survivor from its current DOM position
+//     to the leftmost slot position (600ms, same duration)
+//  4. Update state (remove 4, reposition survivor, increment number)
+//  5. Flash the new number on the survivor card
+//
+// All movement is done on a cloned absolutely-positioned element so the
+// real DOM layout stays stable during the animation.
+
+async function animateMerge(merge) {
+  const boardEl = document.getElementById("board");
+  const boardRect = boardEl.getBoundingClientRect();
+
+  // Gather DOM elements for the 5 cards involved
+  const allIds = [...merge.removedIds, merge.survivorId];
+  const cardEls = {};
+  boardEl.querySelectorAll(".card").forEach((el) => {
+    if (allIds.includes(el.dataset.id)) cardEls[el.dataset.id] = el;
+  });
+
+  const survivorEl = cardEls[merge.survivorId];
+  const removedEls = merge.removedIds.map((id) => cardEls[id]);
+  const leftmostEl = removedEls[0]; // the leftmost of the 5
+
+  if (!survivorEl || !leftmostEl) return;
+
+  // 1. Flash all 5 gold for 200ms
+  allIds.forEach((id) => {
+    const el = cardEls[id];
+    if (el) el.classList.add("merge-flash");
+  });
+  await delay(200);
+
+  // Measure positions before anything moves
+  const survivorRect = survivorEl.getBoundingClientRect();
+  const targetRect = leftmostEl.getBoundingClientRect();
+
+  // 2. Create a flying clone of the survivor, positioned absolutely over the board
+  const clone = survivorEl.cloneNode(true);
+  clone.classList.add("merge-flying");
+  clone.style.position = "fixed";
+  clone.style.left = survivorRect.left + "px";
+  clone.style.top = survivorRect.top + "px";
+  clone.style.width = survivorRect.width + "px";
+  clone.style.height = survivorRect.height + "px";
+  clone.style.margin = "0";
+  clone.style.zIndex = "200";
+  clone.style.transition = "none";
+  document.body.appendChild(clone);
+
+  // Hide the real survivor card while the clone flies
+  survivorEl.style.opacity = "0";
+  survivorEl.style.pointerEvents = "none";
+
+  // 3. Fade out the 4 left cards simultaneously
+  removedEls.forEach((el) => {
+    if (el) {
+      el.classList.remove("merge-flash");
+      el.classList.add("merge-removing");
+    }
+  });
+
+  // Force reflow so transition kicks in
+  clone.getBoundingClientRect();
+
+  // Slide the clone to the leftmost position
+  const dx = targetRect.left - survivorRect.left;
+  const dy = targetRect.top - survivorRect.top;
+  clone.style.transition = "transform 650ms cubic-bezier(0.25, 0.46, 0.45, 0.94), box-shadow 650ms";
+  clone.style.transform = `translate(${dx}px, ${dy}px)`;
+  clone.style.boxShadow = "0 0 32px 8px rgba(108, 140, 255, 0.6)";
+
+  // Wait for animations to complete
+  await delay(700);
+
+  // Clean up clone
+  clone.remove();
+
+  // 4. Apply state changes (remove 4, reposition survivor, increment number)
+  applyMerge(merge);
+
+  // 5. Re-render, then flash the updated number on the survivor
+  render();
+
+  // Brief highlight on the new card at position merge.start
+  await delay(30); // let DOM settle
+  const newSurvivorEl = boardEl.querySelectorAll(".card")[merge.start];
+  if (newSurvivorEl) {
+    newSurvivorEl.classList.add("merge-upgraded");
+    await delay(600);
+    newSurvivorEl.classList.remove("merge-upgraded");
+  }
 }
 
 async function processMatches() {
@@ -507,33 +626,30 @@ async function processMatches() {
     const merge = merges[0];
     totalBonus += merge.bonus;
 
-    let msg = getMergeMessage(merge);
+    // Unlock next number if needed
     if (merge.nextNumber <= MAX_NUMBER && merge.nextNumber > state.unlockedMax) {
       state.unlockedMax = merge.nextNumber;
-      msg += ` Number ${merge.nextNumber} unlocked on pieces.`;
     }
 
-    setMessage(msg, "bonus");
-
-    document.querySelectorAll(".card").forEach((el) => {
-      if (merge.ids.includes(el.dataset.id)) el.classList.add("removing");
-    });
-
-    await delay(420);
-
-    if (applyMerge(merge)) {
-      setMessage("Board cleared! New starter card dealt.", "bonus");
-    }
-
+    setMessage(getMergeMessage(merge), "bonus");
     state.score += merge.bonus;
-    render();
-    await delay(200);
+
+    // Show score pop near the survivor card
+    const survivorEl = document.querySelector(`.card[data-id="${merge.survivorId}"]`);
+    if (survivorEl) {
+      const r = survivorEl.getBoundingClientRect();
+      showScorePop(merge.bonus, r.left + r.width / 2, r.top);
+    }
+
+    await animateMerge(merge);
 
     if (checkWin()) break;
+
+    await delay(150);
   }
 
   if (totalBonus > 0 && chain > 1) {
-    setMessage(`Merge chain x${chain}! Total bonus: +${totalBonus}`, "bonus");
+    setMessage(`Merge chain ×${chain}! Total bonus: +${totalBonus}`, "bonus");
   }
 }
 
@@ -596,9 +712,7 @@ document.addEventListener("keydown", (e) => {
   if (!card) return;
   e.preventDefault();
   rotateCard(card);
-  if (!checkGameOver()) {
-    setMessage("Flipped 180° (R)");
-  }
+  if (!checkGameOver()) setMessage("Flipped 180° (R)");
   render();
 });
 
